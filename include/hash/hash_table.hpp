@@ -1,100 +1,49 @@
-//written by Ananyaa Sutaria
-#include "hash/hash_table.h"
-#include <cstring>
-#include <algorithm>
+#pragma once
+#include <vector>
+#include <string>
+#include "hash/splitmix64.hpp"
+#include "hash/string_pool.hpp"
 
-using namespace std;
+struct Bucket {
+  int hash = 0;
+  int key_off = 0;
+  int key_len = 0;
+  int freq = 0;
+  int state = 0; // 0=empty, 1=occupied, 2=tombstone
+};
 
-void HashTable::reserve(size capacity) {
-  if((capacity & (capacity-1)) != 0) {
-        capacity = 1ull << 64 - __builtin_ctzl(capacity);
-  }
-  buckets_.assign(capacity, {});
-  size = 0;
-  used = 0;
-  mask = capacity - 1;
-}
+class HashTable {
+public:
+  explicit HashTable(StringPool& p) : pool(p) { reserve(1 << 20); }
 
-void HashTable::clear() {
-    fill(buckets_.begin(), buckets_.end(), Bucket{});
-    size = 0;
-    used = 0;
-}
+  void reserve(size_t tableSizePowerOfTwo);
+  void clear();
 
-bool HashTable::maybe_grow() {
-  if(float(used + 1) / float(buckets.size()) >= max_load) {
-    rehash(buckets.size() * 2);
-    return true;
-  }
-  return false;
-}
+  bool insert(const std::string& word, int freq);
+  bool insert(const char* s, int len, int freq);
 
-void HashTable::rehash(size_t new_capacity) {
-  vector<Bucket> old = move(buckets);
-  buckets.assign(new_capacity, {});
-  mask = new_capacity - 1;
-  used = 0;
-  size = 0;
-  for(const auto& bucket : old) {
-    if(bucket.state == 1) {
-      insert(pool.ptr(bucket.key_off), bucket.key_len, bucket.freq);
-    }
-  }
-}
+  bool get(const std::string& word, int& out_freq) const;
+  bool get(const char* s, int len, int& out_freq) const;
 
-bool HashTable::key_equals(const Bucket& b, const char* s, int len) const {
-  if(b.key_len != len) return false;
-  return memcmp(pool.ptr(b.key_off), s, len) == 0;
-}
+  // Renamed these so they don’t conflict with variable names
+  size_t getSize() const { return size; }
+  size_t getCapacity() const { return bucketList.size(); }
+  float getLoadFactor() const { return static_cast<float>(size) / static_cast<float>(bucketList.size()); }
 
-bool HashTable::insert(const std::string& word,int freq) {
-  return insert(word.data(), int(word.size(), freq);
-}
+  const StringPool& getPool() const { return pool; }
+  const std::vector<Bucket>& getBuckets() const { return bucketList; }
 
-bool HashTable::insert(const char* s,int len, int freq) {
-  maybe_grow();
-  int h = hash_bytes(s, len);
-  int i = probe_index(h);
-  int first_tomb = -1;
-  while(true) {
-    auto& bucket = buckets[i];
-    if(bucket.state == 0) {
-      auto index = (first_tomb >= 0) ? (int)first_tomb : i;
-      auto& dst = buckets[index];
-      dst.hash = h;
-      dst.key_off = pool..add(s, len);
-      dst.freq = freq;
-      dst.state = 1;
-      size++;
-      if(first_tomb < 0) used++;
-      return true;
-    } else if (bucket.state == 2) {
-      if(first_tomb < 0) first_tomb = (int)i;
-    } else if (bucket.hash == h && key_equals(bucket,s,len)){
-        bucket.freq = freq;
-        return false;
-    }
-    i =(i+1) & mask;
-  }
-}
+private:
+  StringPool& pool;
+  std::vector<Bucket> bucketList;  // renamed from buckets to avoid collision
+  size_t size = 0;
+  size_t used = 0;
+  size_t mask = 0;
+  float max_load = 0.7f;
 
-bool HashTable::get(const std::string& word,int out_freq) const {
-  return get(word.data(), int(word.size(), out_freq));
-}
+  void rehash(size_t newCapacity);
+  bool maybeGrow();
 
-bool HashTable::get(const char* s,int len, int& out_freq) const {
-  if(buckets.empty()) return false;
-  int h = hash_bytes(s, len);
-  int i = probe_index(h);
-  while(true) {
-    auto& bucket = buckets[i];
-    if(bucket.state == 0) {
-      return false;
-    }
-    if(bucket.state == 1 && bucket.hash == h && key_equals(bucket,s,len)) {
-      out_freq = bucket.freq;
-      return true;
-    }
-    i = (i+1) & mask;
-  }
-}
+  inline int probeIndex(int h) const { return h & static_cast<int>(mask); }
+  bool keyEquals(const Bucket& b, const char* s, int len) const;
+};
