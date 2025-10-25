@@ -25,7 +25,6 @@ public:
   bool get(const std::string& word, int& out_freq) const;
   bool get(const char* s, int len, int& out_freq) const;
 
-  // Renamed these so they don’t conflict with variable names
   size_t getSize() const { return size; }
   size_t getCapacity() const { return bucketList.size(); }
   float getLoadFactor() const { return static_cast<float>(size) / static_cast<float>(bucketList.size()); }
