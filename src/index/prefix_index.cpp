@@ -1,3 +1,162 @@
-//
-// Created by Anyaa Sutaria on 10/22/25.
-//
+// written by Ananyaa Sutaria
+
+#include "index/prefix_index.hpp"
+#include <algorithm>
+#include <cstring>
+
+using namespace std;
+
+void PrefixIndex::reserve(int capacity) {
+  if((capacity & (capacity - 1)) != 0) {
+    capacity = 1ull << 64 - __builtin_ctzll(capacity);
+  }
+  table.assign(capacity, {});
+  lists.clear();
+  size = 0;
+  used=0;
+  mask = capacity - 1;
+}
+
+bool PrefixIndex::maybe_grow() {
+  if (float(used +1) / float(table.size()) > 0.7f) {
+    rehash(table.size() * 2);
+    return true;
+  }
+  return false;
+}
+
+void PrefixIndex::rehash(int new_capacity) {
+  vector<PrefixBucket> old = move(table);
+  table.assign(new_capacity, {});
+  mask = new_capacity - 1;
+  used = 0;
+  size = 0;
+
+  for(auto& bucket : old) {
+    if(bucket.state == 1) {
+      int h = bucket.hash;
+      int i = int(h) & int(mask);
+      while(true) {
+        auto& new_bucket = table[i];
+        if(new_bucket.state == 0) {
+          new_bucket = bucket;
+          new_bucket.state = 1;
+          used++;
+          size++;
+          break;
+        }
+        i = (i + 1) & int(mask);
+      }
+    }
+  }
+}
+
+bool PrefixIndex::key_equals(const PrefixBucket & b, const char* s, int len) const {
+  if (b.key_len != len) return false;
+  return memcmp(pool.ptr(b.key_off), s, len) == 0;
+}
+
+int PrefixIndex::upsert_list(const char* pre, int plen) {
+  if (plen > (int) plen)
+    plen = L;
+  int h = hash_bytes(pre, plen);
+  maybe_grow();
+  int i = int(h) & int(mask);
+  int first_tomb = -1;
+  while(true) {
+    auto& bucket = table[i];
+    if(bucket.state == 0) {
+      int index = (first_tomb >= 0) ? first_tomb : i;
+      auto& destination = table[index];
+      destination.hash = h;
+      destination.key_len = plen;
+      destination.key_off = pool.add(pre, plen);
+      destination.state = 1;
+      lists.push_back(PrefixList{});
+      lists.back().items.reserve(K);
+      size++;
+      if(first_tomb >= 0)
+        used++;
+      return destination.list_id;
+
+    } else if (bucket.state == 2) {
+      if(first_tomb < 0)
+        first_tomb = i;
+    } else if (bucket.hash ==h && key_equals(bucket, pre, plen)) {
+        return bucket.list_id;
+    }
+    i = (i + 1) & int(mask);
+  }
+
+}
+
+void PrefixIndex::insert_candidate(int list_id,Candidate candidate) {
+  auto& lst = lists[list_id].items;
+
+  if ((int)lst.size() < K) {
+    lst.push_back(candidate);
+    std::push_heap(lst.begin(), lst.end(),
+        [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; }); // min-heap by freq
+  } else {
+    std::make_heap(lst.begin(), lst.end(),
+        [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
+    if (candidate.freq > lst.front().freq) {
+      std::pop_heap(lst.begin(), lst.end(),
+          [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
+      lst.back() = candidate;
+      std::push_heap(lst.begin(), lst.end(),
+          [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
+    }
+  }
+}
+
+
+void PrefixIndex::build_from_vocab(const HashTable& vocab) {
+  clear(); reserve(1 << 18);
+  const auto& buckets = vocab.getBuckets();
+  for (const auto& b : buckets) {
+    if (b.state != 1) continue;
+    const char* w = vocab.getPool().ptr(b.key_off);
+    int len  = b.key_len;
+    int freq = b.freq;
+    for (int plen = 1; plen <= (int)L && plen <= len; ++plen) {
+      int id = upsert_list(w, plen);
+      insert_candidate(id, Candidate{ b.key_off, len, freq });
+    }
+  }
+  for (auto& pl : lists) {
+    auto& v = pl.items;
+    sort(v.begin(), v.end(), [](const Candidate& a, const Candidate& b){
+        if (a.freq != b.freq) return a.freq > b.freq;
+        return a.len < b.len;
+    });
+    if ((int)v.size() > K) v.resize(K);
+  }
+}
+
+void PrefixIndex::query(const std::string& prefix, std::vector<Candidate>& out) const {
+  out.clear();
+  int plen = (int)prefix.size();
+  if (plen == 0) return;
+  if (plen > (int)L) plen = L;
+  int h = hash_bytes(prefix.data(), plen);
+  int i = int(h) & int(mask);
+  while (true) {
+    const auto& b = table[i];
+    if (b.state == 0) return;
+    if (b.state == 1 && b.hash == h &&
+        key_equals(b, prefix.data(), plen)) {
+      const auto& lst = lists[b.list_id].items;
+      out = lst;
+      return;
+        }
+    i = (i + 1) & mask;
+  }
+}
+
+size_t PrefixIndex::mem_bytes() const {
+  size_t table_bytes = table.size() * sizeof(PrefixBucket);
+  size_t lists_bytes = 0;
+  for (auto& pl : lists) lists_bytes += pl.items.capacity() * sizeof(Candidate);
+  return table_bytes + lists_bytes;
+}

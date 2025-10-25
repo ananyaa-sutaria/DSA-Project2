@@ -16,7 +16,7 @@ struct Candidate {
 };
 
 struct PrefixList {
-  std::vector<Candidate> candidates;
+  std::vector<Candidate> items;
 };
 
 struct PrefixBucket {
@@ -37,7 +37,7 @@ class PrefixIndex {
     void build_from_vocab(const HashTable& vocab);
     void query(const string& prefix, vector<Candidate>& output) const;
 
-    size_t memory_usage() const;
+    size_t mem_bytes() const;
 
   private:
     StringPool& pool;
