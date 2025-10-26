@@ -160,3 +160,10 @@ size_t PrefixIndex::mem_bytes() const {
   for (auto& pl : lists) lists_bytes += pl.items.capacity() * sizeof(Candidate);
   return table_bytes + lists_bytes;
 }
+
+void PrefixIndex::clear() {
+  std::fill(table.begin(), table.end(), PrefixBucket{});
+  lists.clear();
+  size = 0;
+  used = 0;
+}

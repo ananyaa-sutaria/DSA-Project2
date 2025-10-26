@@ -5,7 +5,9 @@
 #include "hash/string_pool.hpp"
 #include "hash/hash_table.hpp"
 #include "index/prefix_index.hpp"
+#include "util/json_words.hpp"
 #include "util/csv.hpp"
+#include "util/word_row.hpp"
 
 using namespace std;
 
@@ -16,13 +18,24 @@ static inline int now_us() {
 }
 
 int main(int argc, char** argv) {
-  string csv_path =(argc > 1) ? string(argv[1]) : string("data.csv");
-  vector<WordRow> rows;
-  if(!csv::load_word_freq_csv(csv_path, rows)) {
-    cerr << "Failed to load CSV file" << endl;
+  std::string path = (argc > 1) ? std::string(argv[1]) : std::string("allwords_wordset.json");
+
+  std::vector<WordRow> rows;
+  auto ends_with = [](const std::string& s, const std::string& suffix){
+    return s.size() >= suffix.size() && s.compare(s.size()-suffix.size(), suffix.size(), suffix) == 0;
+  };
+
+  bool ok = false;
+  if (ends_with(path, ".json")) {
+    ok = json_words::load_word_freq_json(path, rows);
+  } else {
+    ok = csv::load_word_freq_csv(path, rows);
+  }
+  if (!ok) {
+    std::cerr << "Failed to load dataset: " << path << "\n";
     return 1;
   }
-  cout << "Loaded CSV file" << endl;
+  std::cout << "Loaded " << rows.size() << " words\n";
 
   StringPool pool;
   HashTable vocab(pool);
@@ -30,7 +43,7 @@ int main(int argc, char** argv) {
 
   int t0 = now_us();
   for (auto row : rows) {
-    vocab.insert(row.word, row.frequency);
+    vocab.insert(row.word, row.freq);
   }
 
   int t1 = now_us();
