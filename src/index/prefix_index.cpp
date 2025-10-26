@@ -6,24 +6,39 @@
 
 using namespace std;
 
-void PrefixIndex::reserve(int capacity) {
-  if((capacity & (capacity - 1)) != 0) {
-    capacity = 1ull << 64 - __builtin_ctzll(capacity);
-  }
-  table.assign(capacity, {});
-  lists.clear();
-  size = 0;
-  used=0;
-  mask = capacity - 1;
+static inline size_t nextPow2(size_t x) {
+  if (x < 2) return 2;
+  x--;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+#if ULONG_MAX > 0xFFFFFFFFUL
+  x |= x >> 32;
+#endif
+  return x + 1;
 }
 
+void PrefixIndex::reserve(int capacity) {
+  size_t cap = static_cast<size_t>(capacity);
+  size_t newCap = (cap & (cap - 1)) ? nextPow2(cap) : cap;
+
+  table.assign(newCap, PrefixBucket{});
+  lists.clear();
+  size = 0;
+  used = 0;
+  mask = static_cast<int>(newCap - 1);
+}
+
+
 bool PrefixIndex::maybe_grow() {
-  if (float(used +1) / float(table.size()) > 0.7f) {
-    rehash(table.size() * 2);
-    return true;
-  }
+  if (table.empty()) { reserve(1 << 18); return true; }
+  float lf = float(used + 1) / float(table.size());
+  if (lf >= 0.7f) { rehash(static_cast<int>(table.size() * 2)); return true; }
   return false;
 }
+
 
 void PrefixIndex::rehash(int new_capacity) {
   vector<PrefixBucket> old = move(table);
@@ -65,21 +80,26 @@ int PrefixIndex::upsert_list(const char* pre, int plen) {
   int first_tomb = -1;
   while(true) {
     auto& bucket = table[i];
-    if(bucket.state == 0) {
+    if (bucket.state == 0) {
       int index = (first_tomb >= 0) ? first_tomb : i;
       auto& destination = table[index];
-      destination.hash = h;
+
+      destination.hash    = h;
       destination.key_len = plen;
       destination.key_off = pool.add(pre, plen);
-      destination.state = 1;
+      destination.state   = 1;
+
+      // >>> set list_id BEFORE returning <<<
+      destination.list_id = static_cast<int>(lists.size());
       lists.push_back(PrefixList{});
       lists.back().items.reserve(K);
+
       size++;
-      if(first_tomb >= 0)
-        used++;
+      if (first_tomb < 0) used++;   // <— note: new occupied bucket
       return destination.list_id;
 
-    } else if (bucket.state == 2) {
+
+  } else if (bucket.state == 2) {
       if(first_tomb < 0)
         first_tomb = i;
     } else if (bucket.hash ==h && key_equals(bucket, pre, plen)) {
