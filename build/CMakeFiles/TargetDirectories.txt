@@ -1,0 +1,4 @@
+/Users/anyaasutaria/CLionProjects/DSA-Project2/build/CMakeFiles/autocomplete.dir
+/Users/anyaasutaria/CLionProjects/DSA-Project2/build/CMakeFiles/autocomplete_server.dir
+/Users/anyaasutaria/CLionProjects/DSA-Project2/build/CMakeFiles/edit_cache.dir
+/Users/anyaasutaria/CLionProjects/DSA-Project2/build/CMakeFiles/rebuild_cache.dir

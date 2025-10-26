@@ -9,11 +9,7 @@
 
 using namespace std;
 
-struct Candidate {
-  int off = 0;
-  int len = 0;
-  int freq = 0;
-};
+#include "index/candidate.hpp"
 
 struct PrefixList {
   std::vector<Candidate> items;

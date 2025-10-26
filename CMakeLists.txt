@@ -15,7 +15,8 @@ file(GLOB SRC
 
 add_executable(autocomplete ${SRC}
         include/third_party/httplib.h
-        src/http/server.cpp)
+        src/http/server.cpp
+        include/index/candidate.hpp)
 
 
 # server executable (web UI)

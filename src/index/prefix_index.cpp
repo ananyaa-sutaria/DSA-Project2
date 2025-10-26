@@ -1,6 +1,7 @@
 // written by Ananyaa Sutaria
 
 #include "index/prefix_index.hpp"
+#include "index/candidate.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -110,23 +111,24 @@ int PrefixIndex::upsert_list(const char* pre, int plen) {
 
 }
 
-void PrefixIndex::insert_candidate(int list_id,Candidate candidate) {
-  auto& lst = lists[list_id].items;
+void PrefixIndex::insert_candidate(int list_id, Candidate c) {
+  auto& v = lists[list_id].items;
 
-  if ((int)lst.size() < K) {
-    lst.push_back(candidate);
-    std::push_heap(lst.begin(), lst.end(),
-        [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; }); // min-heap by freq
-  } else {
-    std::make_heap(lst.begin(), lst.end(),
-        [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
-    if (candidate.freq > lst.front().freq) {
-      std::pop_heap(lst.begin(), lst.end(),
-          [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
-      lst.back() = candidate;
-      std::push_heap(lst.begin(), lst.end(),
-          [](const Candidate& a, const Candidate& b){ return a.freq > b.freq; });
-    }
+  if ((int)v.size() < K) {
+    v.push_back(c);
+    std::sort(v.begin(), v.end(), [](const Candidate& a, const Candidate& b){
+        if (a.freq != b.freq) return a.freq > b.freq;
+        return a.len < b.len;
+    });
+    return;
+  }
+
+  if (c.freq > v.back().freq) {
+    v.back() = c; // copies len as-is
+    std::sort(v.begin(), v.end(), [](const Candidate& a, const Candidate& b){
+        if (a.freq != b.freq) return a.freq > b.freq;
+        return a.len < b.len;
+    });
   }
 }
 
@@ -146,6 +148,15 @@ void PrefixIndex::build_from_vocab(const HashTable& vocab) {
       int listId = upsert_list(wptr, plen);
 
       insert_candidate(listId, Candidate{ b.key_off, wlen, freq });
+
+      if (wlen >= 3 && wptr[0]=='p' && wptr[1]=='r' && wptr[2]=='e') {
+        static int printed = 0;
+        if (printed < 3) {
+          fprintf(stdout, "pre-word example: len=%d, word=%.*s\n", wlen, wlen, wptr);
+          printed++;
+        }
+      }
+
     }
   }
   for (auto& pl : lists) {
