@@ -39,7 +39,8 @@ int main(int argc, char** argv) {
 
   StringPool pool;
   HashTable vocab(pool);
-  vocab.reserve(1 << 21);
+  vocab.reserve(
+          1 << 21);
 
   int t0 = now_us();
   for (auto row : rows) {

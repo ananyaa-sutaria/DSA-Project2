@@ -133,15 +133,19 @@ void PrefixIndex::insert_candidate(int list_id,Candidate candidate) {
 
 void PrefixIndex::build_from_vocab(const HashTable& vocab) {
   clear(); reserve(1 << 18);
-  const auto& buckets = vocab.getBuckets();
-  for (const auto& b : buckets) {
+  const auto& vbuckets = vocab.getBuckets();
+
+  for (const auto& b : vbuckets) {
     if (b.state != 1) continue;
-    const char* w = vocab.getPool().ptr(b.key_off);
-    int len  = b.key_len;
-    int freq = b.freq;
-    for (int plen = 1; plen <= (int)L && plen <= len; ++plen) {
-      int id = upsert_list(w, plen);
-      insert_candidate(id, Candidate{ b.key_off, len, freq });
+
+    const char* wptr = vocab.getPool().ptr(b.key_off);
+    int wlen        = b.key_len;       // FULL word length
+    int freq        = b.freq;
+
+    for (int plen = 1; plen <= L && plen <= wlen; ++plen) {
+      int listId = upsert_list(wptr, plen);
+
+      insert_candidate(listId, Candidate{ b.key_off, wlen, freq });
     }
   }
   for (auto& pl : lists) {

@@ -13,4 +13,18 @@ file(GLOB SRC
         src/main.cpp
 )
 
-add_executable(autocomplete ${SRC})
+add_executable(autocomplete ${SRC}
+        include/third_party/httplib.h
+        src/http/server.cpp)
+
+
+# server executable (web UI)
+add_executable(autocomplete_server
+        src/http/server.cpp
+        src/hash/string_pool.cpp
+        src/hash/hash_table.cpp
+        src/index/prefix_index.cpp
+        src/util/json_words.cpp
+)
+
+target_include_directories(autocomplete_server PRIVATE ${CMAKE_SOURCE_DIR}/include)
