@@ -34,7 +34,7 @@ public:
 
 private:
   StringPool& pool;
-  std::vector<Bucket> bucketList;  // renamed from buckets to avoid collision
+  std::vector<Bucket> bucketList;
   size_t size = 0;
   size_t used = 0;
   size_t mask = 0;

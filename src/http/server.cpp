@@ -5,6 +5,8 @@
 #include <vector>
 #include <cctype>
 #include <cstdio>
+#include <chrono>
+#include <iostream>
 
 #include "third_party/httplib.h"
 #include "util/word_row.hpp"
@@ -19,12 +21,14 @@ using namespace std;
 
 static inline string lower_ascii(const string& s) {
     string t = s;
-    for (char& c : t) if (c >= 'A' && c <= 'Z')
+    for (char& c : t) {
+        if (c >= 'A' && c <= 'Z')
             c = char(c - 'A' + 'a');
+    }
     return t;
 }
 
-// Escape JSON from a pointer+length (don’t rely on NUL-termination)
+
 static string json_escape(const char* s, int len) {
     string out;
     out.reserve(len + 8);
@@ -50,14 +54,13 @@ static string json_escape(const char* s, int len) {
         }
     }
     out.push_back('"');
-    return out;                 // return AFTER finishing the loop
+    return out;
 }
 
-static StringPool  g_pool;
-static HashTable*  g_vocab = nullptr;
-static PrefixIndex* g_pidx = nullptr;
+static StringPool   g_pool;
+static HashTable*   g_vocab = nullptr;
+static PrefixIndex* g_pidx  = nullptr;
 
-// Build JSON without converting to C-strings; use ptr+len directly
 static string to_json(const vector<Candidate>& items) {
     string j;
     j.reserve(items.size() * 32);
@@ -70,20 +73,19 @@ static string to_json(const vector<Candidate>& items) {
         j += ",\"freq\":";
         j += std::to_string(c.freq);
         j += "}";
-        if (i + 1 < items.size()) j += ",";
+        if (i + 1 < items.size())
+            j += ",";
     }
     j += "]";
     return j;
 }
 
 int main(int argc, char** argv) {
-    // fix typo in default filename
     string path = (argc > 1) ? string(argv[1]) : string("data/allwords_wordset.json");
 
     vector<WordRow> rows;
     bool valid = json_words::load_word_freq_json(path, rows);
     if (!valid) {
-        // add %s to actually print the path
         fprintf(stderr, "Failed to load data set: %s\n", path.c_str());
         return 1;
     }
@@ -95,43 +97,63 @@ int main(int argc, char** argv) {
         g_vocab->insert(row.word, row.freq);
     }
 
+    // build prefix index: max prefix len 6, top 10 per bucket (adjust if needed)
     g_pidx = new PrefixIndex(g_pool, 6, 10);
     g_pidx->build_from_vocab(*g_vocab);
     fprintf(stdout, "Prefix index ready\n");
 
     httplib::Server sv;
 
-    // fix header key typo and be explicit; also disable caching during dev
+    // CORS / headers
     sv.set_default_headers({
                                    {"Access-Control-Allow-Origin",  "*"},
                                    {"Access-Control-Allow-Headers", "content-type"},
                                    {"Access-Control-Allow-Methods", "GET, OPTIONS"},
-                                   {"Cache-Control", "no-store"},
+                                   {"Cache-Control",                "no-store"},
                            });
 
-    sv.Get("/query", [](const httplib::Request& req, httplib::Response& res) {
-        std::string q;
-        if (auto it = req.get_param_value("q"); !it.empty()) q = lower_ascii(it);
-
+    sv.Get("/query", [&](const httplib::Request& req, httplib::Response& res) {
+        std::string q = req.get_param_value("q");
         int k = 10;
-        if (auto kp = req.get_param_value("k"); !kp.empty()) {
-            try { k = std::max(1, std::min(50, std::stoi(kp))); } catch (...) {}
+        std::string kparam = req.get_param_value("k");
+        if (!kparam.empty()) {
+            try {
+                k = std::stoi(kparam);
+            } catch (...) {
+                k = 10;
+            }
         }
 
         std::vector<Candidate> out;
-        g_pidx->query(q, out);
 
-        if (!out.empty()) {
-            fprintf(stdout, "q=\"%s\" lens:", q.c_str());
-            for (size_t i = 0; i < std::min<size_t>(out.size(), 5); ++i)
-                fprintf(stdout, " %d", out[i].len);
-            fprintf(stdout, "\n");
+        // timing start
+        auto start = std::chrono::high_resolution_clock::now();
+
+        // query the index
+        if (g_pidx) {
+            g_pidx->query(q, out);
         }
 
-        if ((int)out.size() > k) out.resize(k);
+        if ((int)out.size() > k) {
+            out.resize(k);
+        }
 
-        auto body = to_json(out);
-        res.set_content(body, "application/json");
+        // timing end
+        auto end = std::chrono::high_resolution_clock::now();
+        auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        double elapsed_ms = elapsed_us / 1000.0;
+
+        // log to console
+        std::cout << "[Query] \"" << q << "\" took "
+                  << elapsed_ms << " ms (" << elapsed_us << " µs)" << std::endl;
+
+        std::cout << "[Query] \"" << q << "\" -> "
+                  << out.size() << " results in "
+                  << elapsed_ms << " ms (" << elapsed_us << " µs)"
+                  << std::endl;
+
+        std::string json = to_json(out);
+        res.set_content(json, "application/json");
     });
 
     sv.Get("/", [](const httplib::Request&, httplib::Response& res) {

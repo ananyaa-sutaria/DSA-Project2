@@ -7,7 +7,6 @@
 #include "util/json_words.hpp"
 #include "util/csv.hpp"
 #include "util/word_row.hpp"
-#include "hash/string_pool.hpp"
 
 using namespace std;
 
