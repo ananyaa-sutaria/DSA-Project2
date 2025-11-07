@@ -1,0 +1,12 @@
+How to compile:
+
+Hashtable only UI:
+in a fresh terminal, run the following commands
+  - ensure you are in the Project2 folder
+  rm -rf build
+  mkdir build
+  cd build
+
+  cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..
+  cmake --build . --target autocomplete_server --parallel
+  ./autocomplete_server ../data/allwords_wordset.json
