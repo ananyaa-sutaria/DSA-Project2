@@ -19,19 +19,19 @@ using namespace std;
 #include "util/word_row.hpp"
 
 
-struct CandidateMinHeapComp {
-    bool operator() (const Candidate& a , const Candidate& b) const {
-        // Return true if 'a' is considered "worse" (should bubble up, min-heap style) than 'b'.
-
-        // 1. Primary sorting: Higher frequency is better (i.e., lower freq is worse).
-        if (a.freq != b.freq) {
-            // We want smaller frequency at the top, so if a.freq > b.freq, 'a' is "worse".
+struct CandidateMinHeapComp
+{
+    bool operator() (const Candidate& a , const Candidate& b) const
+    {
+        // return true if 'a' is considered "worse" (should bubble up, min-heap style) than 'b'.
+        // primary sorting: higher frequency is better
+        if (a.freq != b.freq)
+        {
+            // want smaller frequency at the top, so if a.freq > b.freq, 'a' is "worse".
             return a.freq > b.freq;
         }
-
-        // 2. Secondary sorting (Tie-breaker): Shorter length is better (i.e., longer length is worse).
-        // If a.len > b.len, 'a' is worse, so we return true to put the longer word
-        // (worse candidate) at the top of the min-heap.
+        // secondary sorting (Tie-breaker): Shorter length is better (i.e., longer length is worse).
+        // a.len > b.len, 'a' is worse, so we return true (worse candidate) at the top of the min-heap.
         return a.len > b.len;
     }
 };
@@ -40,25 +40,29 @@ static const int alphabet_size = 26;
 static const int char_offset = 'a';
 
 // info about word at end of node
-struct WordInfo {
+struct WordInfo
+{
     int string_pool_offset = -1;
     int len = 0;
     int freq = 0;
 };
 
-struct TrieNode {
+struct TrieNode
+{
     TrieNode* children[alphabet_size] = {nullptr};
     WordInfo* word_info = nullptr;
     int max_suffix_freq = 0;
 };
 
-class TrieIndex{
+class TrieIndex
+{
     public:
-    TrieIndex(StringPool& p) : pool(p) {
+    TrieIndex(StringPool& p) : pool(p)
+    {
         root = new_node();
     }
-
-    ~TrieIndex() {
+    ~TrieIndex()
+    {
         clear();
     }
 
@@ -73,10 +77,6 @@ class TrieIndex{
 
     vector<TrieNode*> all_nodes;
     TrieNode* new_node();
-    void find_top_k_candidates(
-        TrieNode* node,
-        std::priority_queue<Candidate, std::vector<Candidate>, CandidateMinHeapComp>& top_k,
-        int k
-    ) const;
+    void find_top_k_candidates(TrieNode* node, std::priority_queue<Candidate, std::vector<Candidate>, CandidateMinHeapComp>& top_k, int k) const;
 };
 
