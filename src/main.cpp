@@ -1,6 +1,3 @@
-//
-// written by ananyaa sutaria, refactored for CLI by Gemini
-
 #include <iostream>
 #include <chrono>
 #include <vector>
