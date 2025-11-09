@@ -67,7 +67,6 @@ void display_results(const vector<Candidate>& out, const string& pre, int time_u
 }
 
 // menu actions
-
 void load_data_action(const std::string& path) {
     rows.clear();
     vocab.clear();
@@ -143,7 +142,9 @@ void build_structure_action() {
         is_hash_built = true;
         cout << "\n--- Hash-based Index Built ---\n";
         cout << "Build time: " << hash_build_time_us / 1000.0 << " ms\n";
-    } else if (sub_ch == INDEX_TRIE) {
+    }
+    else if (sub_ch == INDEX_TRIE)
+    {
         // build Trie-based Index (TrieIndex)
         trie_idx.clear();
         int t0 = now_us();
@@ -158,12 +159,13 @@ void build_structure_action() {
     }
 }
 
-void query_prefix_action() {
-    if ((current_index == INDEX_HASH && !is_hash_built) || (current_index == INDEX_TRIE && !is_trie_built)) {
+void query_prefix_action()
+{
+    if ((current_index == INDEX_HASH && !is_hash_built) || (current_index == INDEX_TRIE && !is_trie_built))
+    {
         cout << "Please build the selected index first [2].\n";
         return;
     }
-
     string pre;
     cout << "\nEnter prefix to query: ";
     if (!(cin >> pre)) {
@@ -177,28 +179,33 @@ void query_prefix_action() {
     vector<Candidate> out;
     int a = now_us();
 
-    if (current_index == INDEX_HASH) {
+    if (current_index == INDEX_HASH)
+    {
         // Hash Index Query
         pidx.query(pre, out);
         cout << "Using: Hash-based Index (L=" << L << ", K=" << K << ")\n";
-    } else {
+    }
+    else
+    {
         // Trie Index Query
         trie_idx.query(pre, out, K);
         cout << "Using: Trie-based Index (K=" << K << ")\n";
     }
-
     int b = now_us();
     display_results(out, pre, (b - a));
 }
 
-void exact_lookup_action() {
-    if (!is_data_loaded) {
+void exact_lookup_action()
+{
+    if (!is_data_loaded)
+    {
         cout << "Please load a dataset first [1].\n";
         return;
     }
     string w;
     cout << "\nEnter word for exact lookup: ";
-    if (!(cin >> w)) {
+    if (!(cin >> w))
+    {
         cin.clear();
         cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         cout << "Invalid input.\n";
@@ -230,10 +237,10 @@ void display_stats_action() {
         cout << "  Build Time: " << hash_build_time_us / 1000.0 << " ms\n";
         cout << "  Memory Usage: " << pidx.mem_bytes() / (1024.0 * 1024.0) << " mB\n";
         cout << "  Parameters: L=" << L << ", K=" << K << "\n";
-    } else {
+    }
+    else {
         cout << "  Build Status: NOT BUILT\n";
     }
-
     // Trie Index Stats
     cout << "\n[2] Trie-based Index (TrieIndex):\n";
     if (is_trie_built) {
@@ -243,43 +250,40 @@ void display_stats_action() {
     } else {
         cout << "  Build Status: NOT BUILT\n";
     }
-
     // global stats (StringPool is shared, vocab is the underlying dictionary)
     cout << "\n[Global/Shared Data]\n";
     cout << "  StringPool Size: " << pool.size() / (1024.0 * 1024.0) << " mB\n";
     cout << "  Vocabulary (HashTable) Size: " << vocab.getSize() << " unique words\n";
 }
 
-void switch_index_action() {
+void switch_index_action()
+{
     current_index = (current_index == INDEX_HASH) ? INDEX_TRIE : INDEX_HASH;
     cout << "\n--- Implementation Switched ---\n";
-    cout << "Current Autocomplete Index: "
-         << ((current_index == INDEX_HASH) ? "Hash-based Index (PrefixIndex)" : "Trie-based Index (TrieIndex)")
-         << ".\n";
+    cout << "Current Autocomplete Index: " << ((current_index == INDEX_HASH) ? "Hash-based Index (PrefixIndex)" : "Trie-based Index (TrieIndex)");
+
 }
 
 
 // main
-int main(int argc, char** argv) {
-  // path
+int main(int argc, char** argv)
+{
   std::string path = (argc > 1) ? std::string(argv[1]) : std::string("../data/allwords_wordset.json");
-  // initial load on startup
   load_data_action(path);
-  // current index default hash
   current_index = INDEX_HASH;
 
-  while (true)
-{
-    std::cout << "\n======================================================\n";
-    std::cout << "Current Index: "<< ((current_index == INDEX_HASH) ? "Hash-based (PrefixIndex)" : "Trie-based (TrieIndex)")<< " | Data: " << (is_data_loaded ? "LOADED" : "UNLOADED") << "\n";
-    std::cout << "======================================================\n";
-    std::cout << "[1] Load Dataset (" << path << ")\n";
-    std::cout << "[2] Build Structure: (a) Hash-Index (b) Trie-Index\n";
-    std::cout << "[3] Query Prefix: k=" << K << "\n";
-    std::cout << "[4] Inspect stats (Memory, Build time)\n";
-    std::cout << "[5] Switch implementation (current: "<< ((current_index == INDEX_HASH) ? "Hash" : "Trie") << ")\n";
-    std::cout << "[6] Exact Word Lookup\n";
-    std::cout << "[0] Exit\n> ";
+while (true)
+  {
+  std::cout << "\n======================================================\n";
+  std::cout << "Current Index: "<< ((current_index == INDEX_HASH) ? "Hash-based (PrefixIndex)" : "Trie-based (TrieIndex)")<< " | Data: " << (is_data_loaded ? "LOADED" : "UNLOADED") << "\n";
+  std::cout << "======================================================\n";
+  std::cout << "[1] Load Dataset (" << path << ")\n";
+  std::cout << "[2] Build Structure: (a) Hash-Index (b) Trie-Index\n";
+  std::cout << "[3] Query Prefix: k=" << K << "\n";
+  std::cout << "[4] Inspect stats (Memory, Build time)\n";
+  std::cout << "[5] Switch implementation (current: "<< ((current_index == INDEX_HASH) ? "Hash" : "Trie") << ")\n";
+  std::cout << "[6] Exact Word Lookup\n";
+  std::cout << "[0] Exit\n> ";
 
     int ch;
     //error check inputs
@@ -316,8 +320,8 @@ int main(int argc, char** argv) {
       default:
         cout << "Invalid choice. Please enter a number between 0 and 6.\n";
     }
-  }
+    }
 
-  cout << "\nExiting Autocomplete Demo. Goodbye!\n";
-  return 0;
+    cout << "\nExiting Autocomplete Demo. Goodbye!\n";
+    return 0;
 }
