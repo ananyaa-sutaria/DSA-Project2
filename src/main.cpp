@@ -1,3 +1,4 @@
+//created by Ananyaa and Catherine
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -283,7 +284,8 @@ int main(int argc, char** argv) {
 
     int ch;
     //error check inputs
-    if (!(std::cin >> ch)) {
+    if (!(std::cin >> ch))
+    {
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cout << "Invalid input. Please enter a number from the menu.\n";
@@ -294,7 +296,8 @@ int main(int argc, char** argv) {
 
     if (ch == 0) break;
     //menu option cases
-    switch (ch) {
+    switch (ch)
+    {
       case 1:
         load_data_action(path);
         break;

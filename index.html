@@ -254,7 +254,8 @@
     let indexToQuery = (currentMode === 'Trie') ? trieIndex : hashIndex;
 
     // run query to time
-    const { timeUs: totalQueryTimeUs } = timeIt(() => {
+    const { timeUs: totalQueryTimeUs } = timeIt(() =>
+    {
       for (let i = 0; i < BENCHMARK_ITERATIONS; i++) {
         // store result of the last run for display
         candidates = indexToQuery.query(prefix);
@@ -263,12 +264,10 @@
 
     // calculate average
     const averageTimeUs = totalQueryTimeUs / BENCHMARK_ITERATIONS;
-
     // display average
     queryStats.textContent = `Time (avg over ${BENCHMARK_ITERATIONS}): ${averageTimeUs.toFixed(3)} μs`;
-
-    //results
-    if (!candidates || candidates.length === 0) {
+    if (!candidates || candidates.length === 0)
+    {
       resultsList.innerHTML = `<li class="text-gray-400 py-2 text-center">No suggestions found for "${prefix}".</li>`;
       return;
     }
