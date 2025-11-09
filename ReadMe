@@ -10,3 +10,6 @@ in a fresh terminal, run the following commands
   cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..
   cmake --build . --target autocomplete_server --parallel
   ./autocomplete_server ../data/allwords_wordset.json
+
+For running the html for demo:
+   in terminal use npx serve . or python3 -m http.server 8000
