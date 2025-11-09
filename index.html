@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dual-Index Autocomplete Benchmarking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0d1117; /* Dark background */
+      color: #c9d1d9; /* Light text */
+    }
+    .search-container {
+      background-color: #161b22;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      border: 1px solid #30363d;
+    }
+    input[type="text"] {
+      background-color: #0d1117;
+      border-color: #30363d;
+      color: #c9d1d9;
+    }
+    .toggle-btn {
+      transition: all 0.3s ease;
+    }
+    .active-mode {
+      background-color: #3b82f6;
+      color: white;
+      box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+    }
+    .inactive-mode {
+      background-color: #24292f;
+      color: #8b949e;
+    }
+    .stat-box {
+      background-color: #1a1e23;
+      border: 1px solid #30363d;
+    }
+  </style>
+</head>
+<body class="p-4 sm:p-8 flex flex-col items-center min-h-screen">
+
+<div id="app" class="w-full max-w-xl">
+  <h1 class="text-3xl font-extrabold text-white mb-2 text-center">
+    Prefix Index Comparison Demo
+  </h1>
+  <p class="text-md text-gray-400 mb-6 text-center">
+    Comparing Trie (Tree-based) vs. Hash (PrefixMap) implementations.
+  </p>
+
+  <!-- status & errors -->
+  <div id="status-box" class="p-3 rounded-xl mb-6 text-sm text-center bg-gray-700 text-gray-200 border border-gray-600">
+    Awaiting data load...
+  </div>
+
+  <!-- search bar and controls -->
+  <div class="search-container p-6 rounded-xl">
+
+    <!-- index toggle (Implementation Switch) -->
+    <div class="flex rounded-lg overflow-hidden mb-5 border border-gray-700">
+      <button id="trie-toggle" onclick="switchIndexMode('Trie')" class="flex-1 p-3 text-center font-semibold toggle-btn active-mode rounded-l-lg">
+        Trie Index
+      </button>
+      <button id="hash-toggle" onclick="switchIndexMode('Hash')" class="flex-1 p-3 text-center font-semibold toggle-btn inactive-mode rounded-r-lg">
+        Hash Prefix Index (L=6)
+      </button>
+    </div>
+
+    <!-- search input -->
+    <input type="text" id="prefix-input" placeholder="Loading data... Please wait."
+           oninput="queryPrefixAction()"
+           disabled
+           class="w-full p-4 text-lg rounded-lg border-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+
+    <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+      <div id="word-count-display" class="stat-box p-3 rounded-lg text-center">Words: 0</div>
+      <!-- displaying average time -->
+      <div id="query-stats" class="stat-box p-3 rounded-lg text-center font-mono text-yellow-400 hidden">Time (avg): 0.000 μs</div>
+    </div>
+
+    <!-- results list -->
+    <ul id="results-list" class="space-y-1 mt-4 divide-y divide-gray-700 border-t border-gray-700 pt-2">
+      <li class="text-gray-500 text-center py-4" id="initial-message">Data is loading from "../data/allwords_wordset.json"</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const K = 10; // top k candidates
+  const L = 6;  // max prefix length
+  const JSON_FILE_PATH = "../data/allwords_wordset.json";
+  const BENCHMARK_ITERATIONS = 10000;
+
+  // data structures and states
+  let dataLoaded = [];
+  let trieIndex = null;
+  let hashIndex = null;
+  let currentMode = 'Trie'; // Default mode
+  let isReady = false;
+
+  // measure time
+  const timeIt = (fn) => {
+    const t0 = performance.now() * 1000;
+    const result = fn();
+    const t1 = performance.now() * 1000;
+    return { result, timeUs: t1 - t0 };
+  };
+
+  //TrieIndex Implementation
+  class TrieNode {
+    constructor() {
+      this.children = new Map();
+      this.topKCandidates = [];
+    }
+  }
+
+  class TrieIndex {
+    constructor(k) {
+      this.root = new TrieNode();
+      this.K = k;
+    }
+
+    build(dataRows) {
+      const sortedData = [...dataRows].sort((a, b) => b.freq - a.freq);
+
+      for (const row of sortedData) {
+        let node = this.root;
+        for (let i = 0; i < row.word.length; i++) {
+          const char = row.word[i];
+          if (!node.children.has(char)) {
+            node.children.set(char, new TrieNode());
+          }
+          node = node.children.get(char);
+
+          // Add candidate if not already full
+          if (node.topKCandidates.length < this.K) {
+            node.topKCandidates.push({ word: row.word, freq: row.freq });
+          }
+        }
+      }
+    }
+    query(prefix)
+    {
+      let node = this.root;
+      for (let i = 0; i < prefix.length; i++)
+      {
+        const char = prefix[i];
+        if (!node.children.has(char))
+        {
+          return [];
+        }
+        node = node.children.get(char);
+      }
+      return node.topKCandidates;
+    }
+  }
+
+  //HashPrefixIndex Implementation
+  class HashPrefixIndex
+  {
+    constructor(l, k) {
+      this.prefixMap = new Map(); // key: prefix (string), value: Top K list
+      this.L = l;
+      this.K = k;
+      this.fullSortedList = [];
+    }
+
+    build(dataRows)
+    {
+      // sort with frequency
+      const sortedData = [...dataRows].sort((a, b) => b.freq - a.freq);
+      this.fullSortedList = sortedData;
+
+      // iterate
+      for (let len = 1; len <= this.L; len++)
+      {
+        const uniquePrefixes = new Set();
+        for(const row of sortedData)
+        {
+          if (row.word.length >= len)
+          {
+            uniquePrefixes.add(row.word.substring(0, len));
+          }
+        }
+
+        // each prefix find candidates
+        for (const prefix of uniquePrefixes)
+        {
+          const candidates = sortedData.filter(row => row.word.startsWith(prefix))
+                  .slice(0, this.K)
+                  .map(row => ({ word: row.word, freq: row.freq }));
+
+          this.prefixMap.set(prefix, candidates);
+        }
+      }
+    }
+
+    query(prefix)
+    {
+      if (prefix.length <= this.L) {
+        return this.prefixMap.get(prefix) || [];
+      } else {
+        return this.fullSortedList.filter(row => row.word.startsWith(prefix))
+                .slice(0, this.K)
+                .map(row => ({ word: row.word, freq: row.freq }));
+      }
+    }
+  }
+
+  function switchIndexMode(mode)
+  {
+    if (currentMode === mode || !isReady) return;
+    currentMode = mode;
+
+    const trieBtn = document.getElementById('trie-toggle');
+    const hashBtn = document.getElementById('hash-toggle');
+
+    if (mode === 'Trie') {
+      trieBtn.classList.add('active-mode');
+      trieBtn.classList.remove('inactive-mode');
+      hashBtn.classList.add('inactive-mode');
+      hashBtn.classList.remove('active-mode');
+    }
+    else {
+      hashBtn.classList.add('active-mode');
+      hashBtn.classList.remove('inactive-mode');
+      trieBtn.classList.add('inactive-mode');
+      trieBtn.classList.remove('active-mode');
+    }
+
+    // re-run the query to update
+    queryPrefixAction();
+  }
+
+  function queryPrefixAction()
+  {
+    if (!isReady) return;
+
+    const prefix = document.getElementById('prefix-input').value.trim().toLowerCase();
+    const resultsList = document.getElementById('results-list');
+    const queryStats = document.getElementById('query-stats');
+
+    resultsList.innerHTML = '';
+    queryStats.classList.remove('hidden');
+
+    if (prefix.length === 0) {
+      queryStats.classList.add('hidden');
+      resultsList.innerHTML = `<li class="text-gray-400 py-4 text-center">Start typing to see suggestions...</li>`;
+      return;
+    }
+
+    let candidates;
+    let indexToQuery = (currentMode === 'Trie') ? trieIndex : hashIndex;
+
+    // run query to time
+    const { timeUs: totalQueryTimeUs } = timeIt(() =>
+    {
+      for (let i = 0; i < BENCHMARK_ITERATIONS; i++) {
+        // store result of the last run for display
+        candidates = indexToQuery.query(prefix);
+      }
+    });
+
+    // calculate average
+    const averageTimeUs = totalQueryTimeUs / BENCHMARK_ITERATIONS;
+    // display average
+    queryStats.textContent = `Time (avg over ${BENCHMARK_ITERATIONS}): ${averageTimeUs.toFixed(3)} μs`;
+    if (!candidates || candidates.length === 0)
+    {
+      resultsList.innerHTML = `<li class="text-gray-400 py-2 text-center">No suggestions found for "${prefix}".</li>`;
+      return;
+    }
+
+    candidates.forEach((c, i) => {
+      const li = document.createElement('li');
+      li.className = 'flex justify-between py-2 px-3 rounded-md hover:bg-gray-800 transition duration-100';
+      li.innerHTML = `
+                    <span class="text-white font-medium">${i + 1}. ${c.word}</span>
+                    <span class="text-sm text-gray-400">freq=${c.freq.toLocaleString()}</span>
+                `;
+      resultsList.appendChild(li);
+    });
+  }
+
+  //initialization
+
+  async function loadDataAndInitializeApp() {
+    const statusBox = document.getElementById('status-box');
+    const wordCountDisplay = document.getElementById('word-count-display');
+    const prefixInput = document.getElementById('prefix-input');
+    const initialMessage = document.getElementById('initial-message');
+
+    console.time('Total Data and Index Load Time');
+    console.log(`[INIT] Starting data load from: ${JSON_FILE_PATH}`);
+
+
+    statusBox.textContent = `Attempting to load data from: ${JSON_FILE_PATH}`;
+
+    try {
+      // fetch
+      const response = await fetch(JSON_FILE_PATH);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}. Is 'npx serve .' running from the project root?`);
+      }
+
+      // parse
+      const responseData = await response.json();
+      console.log(`[DATA] JSON file loaded successfully. Parsing contents...`);
+
+      // convert
+      const convertedRows = [];
+      if (typeof responseData === 'object' && responseData !== null && !Array.isArray(responseData)) {
+        for (const wordKey in responseData) {
+          if (Object.prototype.hasOwnProperty.call(responseData, wordKey)) {
+            const word = wordKey;
+            const freq = 1; // default frequency
+            convertedRows.push({ word: word, freq: freq });
+          }
+        }
+        dataLoaded = convertedRows;
+      } else if (Array.isArray(responseData)) {
+        dataLoaded = responseData;
+      }
+      else
+      {
+        throw new Error('JSON data structure is invalid. Expected a top-level Object (map) or an Array.');
+      }
+
+      if (dataLoaded.length === 0)
+      {
+        throw new Error('Data loaded successfully but resulted in zero words. Check file content.');
+      }
+
+      // 4. Build both indexes for comparison
+      wordCountDisplay.textContent = `Words: ${dataLoaded.length.toLocaleString()}`;
+      console.log(`[DATA] Words loaded: ${dataLoaded.length.toLocaleString()}`);
+
+      statusBox.textContent = 'Building both Trie and Hash Indexes...';
+
+      // measure Trie Build time
+      let { timeUs: trieBuildTimeUs } = timeIt(() => {
+        trieIndex = new TrieIndex(K);
+        trieIndex.build(dataLoaded);
+      });
+      console.log(`[BUILD] Trie Index built (O(N*L)) in: ${(trieBuildTimeUs / 1000).toFixed(2)}ms`);
+
+      // measure Hash Build time
+      let { timeUs: hashBuildTimeUs } = timeIt(() => {
+        hashIndex = new HashPrefixIndex(L, K);
+        hashIndex.build(dataLoaded);
+      });
+      console.log(`[BUILD] Hash Prefix Index built (O(N*L*S)) in: ${(hashBuildTimeUs / 1000).toFixed(2)}ms (L=${L})`);
+
+
+      //readiness status
+      statusBox.classList.remove('bg-gray-700', 'border-gray-600', 'bg-red-900', 'border-red-700');
+      statusBox.classList.add('bg-green-900', 'border-green-700', 'text-green-200');
+      statusBox.innerHTML = `✅ Ready! Words: ${dataLoaded.length.toLocaleString()}. <br/>Trie Build: **${(trieBuildTimeUs / 1000).toFixed(2)}ms** | Hash (L=${L}) Build: ${(hashBuildTimeUs / 1000).toFixed(2)}ms`;
+
+      initialMessage.textContent = 'Index ready. Start typing or switch between the modes above!';
+      prefixInput.disabled = false;
+      prefixInput.placeholder = "Type a prefix here...";
+      isReady = true;
+
+      switchIndexMode('Trie');
+      console.timeEnd('Total Data and Index Load Time');
+
+
+    } catch (error) {
+      console.error("Error loading or parsing JSON:", error);
+      statusBox.classList.remove('bg-gray-700', 'border-gray-600', 'bg-green-900', 'border-green-700');
+      statusBox.classList.add('bg-red-900', 'border-red-700', 'text-red-200');
+      statusBox.innerHTML = `❌ FATAL ERROR: Could not load data. ${error.message}`;
+      prefixInput.placeholder = "Loading Failed.";
+      initialMessage.textContent = `Please verify the file path (${JSON_FILE_PATH}) and that 'npx serve .' is running correctly from the project root.`;
+      console.timeEnd('Total Data and Index Load Time');
+    }
+  }
+
+  // data loads when window open
+  window.onload = loadDataAndInitializeApp;
+
+</script>
+</body>
+</html>
