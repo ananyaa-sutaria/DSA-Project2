@@ -11980,7 +11980,7 @@ inline long Client::get_openssl_verify_result() const {
   if (is_ssl_) {
     return static_cast<SSLClient &>(*cli_).get_openssl_verify_result();
   }
-  return -1; // NOTE: -1 doesn't match any of X509_V_ERR_???
+  return -1;
 }
 
 inline SSL_CTX *Client::ssl_context() const {
