@@ -42,32 +42,7 @@ static inline int now_us()
   using namespace std::chrono;
   return duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count();
 }
-
-void display_results(const vector<Candidate>& out, const string& pre, int time_us)
-{
-    if (!is_data_loaded) return;
-
-    size_t display_count = std::min(out.size(), (size_t)K);
-
-    cout << "\n--- Suggestions for \"" << pre << "\" ---\n";
-    if (display_count == 0)
-    {
-        cout << "No suggestions found.\n";
-    }
-
-    for (size_t i = 0; i < display_count; ++i)
-    {
-        auto& c = out[i];
-        // extract word from pool
-        const char* word_ptr = pool.ptr(c.off);
-        string w(word_ptr, c.len);
-        cout << "  " << (i+1) << ". " << w << " (freq=" << c.freq << ")\n";
-    }
-    cout << "Time: " << (double)time_us / 1000.0 << " ms\n";
-}
-
 // menu actions
-
 void load_data_action(const std::string& path) {
     rows.clear();
     vocab.clear();
@@ -259,17 +234,38 @@ void switch_index_action() {
 }
 
 
-// main
-int main(int argc, char** argv) {
-  // path
-  std::string path = (argc > 1) ? std::string(argv[1]) : std::string("../data/allwords_wordset.json");
-  // initial load on startup
-  load_data_action(path);
-  // current index default hash
-  current_index = INDEX_HASH;
-
-  while (true)
+void display_results(const vector<Candidate>& out, const string& pre, int time_us)
 {
+    if (!is_data_loaded) return;
+
+    size_t display_count = std::min(out.size(), (size_t)K);
+
+    cout << "\n--- Suggestions for \"" << pre << "\" ---\n";
+    if (display_count == 0)
+    {
+        cout << "No suggestions found.\n";
+    }
+
+    for (size_t i = 0; i < display_count; ++i)
+    {
+        auto& c = out[i];
+        // extract word from pool
+        const char* word_ptr = pool.ptr(c.off);
+        string w(word_ptr, c.len);
+        cout << "  " << (i+1) << ". " << w << " (freq=" << c.freq << ")\n";
+    }
+    cout << "Time: " << (double)time_us / 1000.0 << " ms\n";
+}
+
+// main
+int main(int argc, char** argv)
+{
+    std::string path = (argc > 1) ? std::string(argv[1]) : std::string("../data/allwords_wordset.json");
+    load_data_action(path);
+    current_index = INDEX_HASH;
+
+    while (true)
+    {
     std::cout << "\n======================================================\n";
     std::cout << "Current Index: "<< ((current_index == INDEX_HASH) ? "Hash-based (PrefixIndex)" : "Trie-based (TrieIndex)")<< " | Data: " << (is_data_loaded ? "LOADED" : "UNLOADED") << "\n";
     std::cout << "======================================================\n";
@@ -282,7 +278,7 @@ int main(int argc, char** argv) {
     std::cout << "[0] Exit\n> ";
 
     int ch;
-    //error check inputs
+//error check inputs
     if (!(std::cin >> ch)) {
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
