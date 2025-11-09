@@ -64,7 +64,6 @@ void HashTable::rehash(size_t newCapacity) {
     // reinsert all occupied entries
     for (const auto& bucket : old) {
         if (bucket.state == 1) {
-            // read key bytes from pool by offset and length
             const char* keyPtr = pool.ptr(bucket.key_off);
             int         keyLen = bucket.key_len;
             int         fq     = bucket.freq;
